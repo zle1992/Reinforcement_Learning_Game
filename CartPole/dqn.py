@@ -2,11 +2,13 @@ import sys
 import gym
 import numpy as np 
 import tensorflow as tf
+
+sys.path.append('./')
 sys.path.append('model')
 
-from Memory import Memory
+from util import Memory ,StateProcessor
 from DeepQNetwork import DeepQNetwork
-
+from DoubleDQNet import DoubleDQNet
 np.random.seed(1)
 tf.set_random_seed(1)
 
@@ -14,12 +16,15 @@ import logging  # 引入logging模块
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')  # logging.basicConfig函数对日志的输出格式及方式做相关配置
 # 由于日志基本配置中级别设置为DEBUG，所以一下打印信息将会全部显示在控制台上
-
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 tfconfig = tf.ConfigProto()
 tfconfig.gpu_options.allow_growth = True
 session = tf.Session(config=tfconfig)
 
-class DeepQNetwork4CartPole(DeepQNetwork):
+
+
+class DeepQNetwork4CartPole(DoubleDQNet):
     """docstring for ClassName"""
     def __init__(self, **kwargs):
         super(DeepQNetwork4CartPole, self).__init__(**kwargs)
@@ -46,16 +51,15 @@ class DeepQNetwork4CartPole(DeepQNetwork):
 
 
 
-batch_size = 64
+batch_size = 32
 
-memory_size  =2000
+memory_size  =20000
 #env = gym.make('Breakout-v0') #离散
 env = gym.make('CartPole-v0') #离散
 
 
 n_features= list(env.observation_space.shape)
 n_actions= env.action_space.n
-
 env = env.unwrapped
 
 def run():
@@ -65,12 +69,15 @@ def run():
         n_features=n_features,
         learning_rate=0.01,
         reward_decay=0.9,
-        e_greedy=0.9,
         replace_target_iter=200,
         memory_size=memory_size,
-        e_greedy_increment=None,
-        output_graph=True,
-        log_dir = 'log/DeepQNetwork4CartPole/',
+        e_greedy=0.85,
+        e_greedy_increment=0.0001,
+        e_greedy_max=0.95,
+        output_graph=False,
+        log_dir = 'CartPole/log/DeepQNetwork4CartPole/',
+        use_doubleQ = True,
+        model_dir = 'CartPole/model_dir/DeepQNetwork4CartPole/'
         )
 
     memory = Memory(n_actions,n_features,memory_size=memory_size)
@@ -104,7 +111,7 @@ def run():
             memory.store_transition(observation, action, reward, observation_)
             
             
-            if (step > 200) and (step % 5 == 0):
+            if (step > 200) and (step % 1 == 0):
                
                 data = memory.sample(batch_size)
                 RL.learn(data)
@@ -116,9 +123,12 @@ def run():
             if(episode>700): 
                 env.render()  # render on the screen
             if done:
-                print('episode: ', episode,
+                print('step',step,
+                    'episode: ', episode,
                       'ep_r: ', round(ep_r, 2),
-                      ' epsilon: ', round(RL.epsilon_max, 2))
+                      ' epsilon: ', round(RL.epsilon_max, 2),
+                      'loss',RL.cost_his[-1]
+                      )
                 ep_r = 0
 
                 break

@@ -139,18 +139,6 @@ class DeepQNetwork4FlappyBird(DoubleDQNet):
         
 
 #FlappyBird  上下
-#
-
-
-# The world's simplest agent!
-class RandomAgent(object):
-    def __init__(self, action_space):
-        self.action_space = action_space
-
-    def act(self, observation, reward, done):
-      
-        return self.action_space.sample()
-
 
 
 
@@ -160,9 +148,9 @@ batch_size = 32
 n_features= [288, 512, 3]
 n_actions= 2
 memory_size  =50000 
-episode_count = 1000
+episode_count = 10000000
 input_shape = [84,84,4]
-OBSERVE = 100000. # timesteps to observe before training
+OBSERVE = 10000. # timesteps to observe before training
 if __name__ == '__main__':
   
     RL = DeepQNetwork4FlappyBird(
@@ -170,11 +158,11 @@ if __name__ == '__main__':
         n_features=input_shape,
         learning_rate=0.01,
         reward_decay=0.9,
-        replace_target_iter=200,
+        replace_target_iter=100,
         memory_size=memory_size,
         e_greedy=0.85,
-        e_greedy_increment=0.0001,
-        e_greedy_max=0.95,
+        e_greedy_increment=0.000001,
+        e_greedy_max=0.99,
         output_graph=True,
         log_dir = 'log/DeepQNetwork4FlappyBird/',
         use_doubleQ = True,
@@ -193,11 +181,11 @@ if __name__ == '__main__':
     reward = 0
     done = False
 
-
+    
     for episode in range(episode_count):
         game_state = game.GameState()
         a_onthot = np.zeros(n_actions)
-        a_onthot[0] = 1
+        a_onthot[1] = 1
         o, reward, done = game_state.frame_step(a_onthot)
         o = sp.process(RL.sess, o)
         observation = np.stack([o]*input_shape[-1],axis=2)
@@ -205,6 +193,7 @@ if __name__ == '__main__':
         while True:
 
             action = RL.choose_action(observation)
+            #print ('action,',action)
             a_onthot = np.zeros(n_actions)
             a_onthot[action] = 1
             o_, reward, done=game_state.frame_step(a_onthot) # take a random action
@@ -237,10 +226,7 @@ if __name__ == '__main__':
                 break
             step += 1
    
-    env.close()
+  
 
-    # Upload to the scoreboard. We could also do this from another
-    # process if we wanted.
     logger.info("Successfully ran RandomAgent. Now trying to upload results to the scoreboard. If it breaks, you can always just try re-uploading the same results.")
-#    gym.upload(outdir)
-    # Syntax for uploading has changed
+
