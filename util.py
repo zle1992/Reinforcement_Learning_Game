@@ -1,41 +1,42 @@
 import numpy as np 
 import tensorflow as tf
+from collections import deque
+import random
 np.random.seed(1)
 class Memory(object):
     """docstring for Memory"""
-    def __init__(self,
-            n_actions,
-            n_features,
-            memory_size):
+    def __init__(self, memory_size):
         super(Memory, self).__init__()
         self.memory_size = memory_size
         self.cnt =0 
-
-        self.s = np.zeros([memory_size]+n_features)
-        self.a = np.zeros([memory_size,])
-        self.r =  np.zeros([memory_size,])
-        self.s_ = np.zeros([memory_size]+n_features)
+        self.Deque = deque()
+       
+       
         
     def store_transition(self,s, a, r, s_):
         #logging.info('store_transition')
-        index = self.cnt % self.memory_size
-        self.s[index] = s
-        self.a[index] = a
-        self.r[index] =  r
-        self.s_[index] =s_
+        self.Deque.append((s, a, r, s_))
+        if self.cnt > self.memory_size:
+            self.Deque.popleft() 
         self.cnt+=1
 
     def sample(self,n):
         #logging.info('sample')
         #assert self.cnt>=self.memory_size,'Memory has not been fulfilled'
         N = min(self.memory_size,self.cnt)
-        indices = np.random.choice(N,size=n)
-        d ={}
-        d['s'] = self.s[indices]
-        d['s_'] = self.s_[indices]
-        d['r'] = self.r[indices]
-        d['a'] = self.a[indices]
-        return d
+        minibatch = random.sample(self.Deque,n) 
+        data ={}
+        data['s'] = np.asarray([d[0] for d in minibatch])
+        data['a'] = np.asarray([d[1] for d in minibatch])
+        data['r'] = np.asarray([d[2] for d in minibatch])
+        data['s_'] =np.asarray([d[3] for d in minibatch])
+
+        # print('data_s',data['s'].shape)
+        # print('data_a',data['a'].shape)
+        # print('data_r',data['r'].shape)
+        # print('data_s_',data['s_'].shape)
+
+        return data
 
 
 class StateProcessor(object):

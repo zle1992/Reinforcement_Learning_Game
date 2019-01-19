@@ -24,7 +24,6 @@ class DDPG(object):
             reward_decay,
             lr_a,
             lr_c,
-            memory_size,
             output_graph,
             log_dir,
             model_dir,
@@ -36,12 +35,10 @@ class DDPG(object):
         self.n_actions = n_actions
         self.n_features = n_features
         self.gamma=reward_decay
-        self.memory_size =memory_size
         self.output_graph=output_graph
         self.lr_a =lr_a
         self.lr_c = lr_c
         self.log_dir = log_dir
-    
         self.model_dir = model_dir 
         # total learning step
         self.learn_step_counter = 0
@@ -51,11 +48,10 @@ class DDPG(object):
 
 
 
-        self.s = tf.placeholder(tf.float32,[None]+self.n_features,name='s')
-        self.s_next = tf.placeholder(tf.float32,[None]+self.n_features,name='s_next')
-        self.r = tf.placeholder(tf.float32,[None,],name='r')
+        self.s = tf.placeholder(tf.float32,[None,self.n_features],name='s')
+        self.s_next = tf.placeholder(tf.float32,[None,self.n_features],name='s_next')
+        self.r = tf.placeholder(tf.float32,[None,1],name='r')
 
-        #self.a = tf.placeholder(tf.int32,[None,1],name='a')
 
         with tf.variable_scope('Actor'):
             self.a = self._build_a_net(self.s, scope='eval', trainable=True)
@@ -132,7 +128,8 @@ class DDPG(object):
         batch_memory_a =  data['a']
         batch_memory_r = data['r']
         batch_memory_s_ = data['s_']
-      
+        
+        batch_memory_r = batch_memory_r[:,np.newaxis]
         _, cost = self.sess.run(
             [self.train_op_actor, self.loss_actor],
             feed_dict={
