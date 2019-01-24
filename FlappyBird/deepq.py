@@ -3,11 +3,13 @@ import os, sys
 import numpy as np 
 import tensorflow as tf
 
+import cv2
 
-sys.path.append("game/")
-import wrapped_flappy_bird as game
-sys.path.append('..')
+sys.path.append("../")
 sys.path.append('../model')
+sys.path.append("game/")
+
+import wrapped_flappy_bird as game
 from util import Memory ,StateProcessor
 from DeepQNetwork import DeepQNetwork
 from DoubleDQNet import DoubleDQNet
@@ -32,6 +34,7 @@ class DeepQNetwork4FlappyBird(DoubleDQNet):
         #w_initializer, b_initializer = tf.random_normal_initializer(0., 0.3), tf.constant_initializer(0.1)
         #w_initializer, b_initializer =tf.contrib.layers.xavier_initializer(), tf.constant_initializer(0.01)
         w_initializer, b_initializer = tf.initializers.truncated_normal(stddev=0.01), tf.constant_initializer(0.01)
+        #w_initializer, b_initializer = None,None
      
         with tf.variable_scope(scope):
             f_conv1 = tf.layers.conv2d(
@@ -140,7 +143,10 @@ class DeepQNetwork4FlappyBird(DoubleDQNet):
 
 #FlappyBird  上下
 
-
+def preporsess(x_t):
+    x_t = cv2.cvtColor(cv2.resize(x_t, (80, 80)), cv2.COLOR_BGR2GRAY)
+    ret, x_t = cv2.threshold(x_t,1,255,cv2.THRESH_BINARY)
+    return x_t
 
 
 
@@ -149,66 +155,64 @@ n_features= [288, 512, 3]
 n_actions= 2
 memory_size  =50000 
 episode_count = 10000000
-input_shape = [84,84,4]
+input_shape = [80,80,4]
 OBSERVE = 10000. # timesteps to observe before training
 if __name__ == '__main__':
   
     RL = DeepQNetwork4FlappyBird(
         n_actions=n_actions,
         n_features=input_shape,
-        learning_rate=0.01,
+        learning_rate=1e-5,
         reward_decay=0.9,
-        replace_target_iter=100,
+        replace_target_iter=200,
         memory_size=memory_size,
-        e_greedy=0.85,
-        e_greedy_increment=0.000001,
-        e_greedy_max=0.99,
+        e_greedy=0.90,
+        e_greedy_increment=1e-7,
+        e_greedy_max=0.999,
         output_graph=True,
         log_dir = 'log/DeepQNetwork4FlappyBird/',
-        use_doubleQ = True,
+        use_doubleQ = False,
         model_dir = 'model_dir/DeepQNetwork4FlappyBird/'
         )
-    memory = Memory(n_actions,input_shape,memory_size=memory_size)
+    memory = Memory(memory_size=memory_size)
     sp = StateProcessor(n_features,input_shape)
 
     
 
     
 
-
-    step = 0
     ep_r = 0
+    step = 0
     reward = 0
     done = False
-
     
     for episode in range(episode_count):
         game_state = game.GameState()
         a_onthot = np.zeros(n_actions)
-        a_onthot[1] = 1
+        a_onthot[1] =  1
         o, reward, done = game_state.frame_step(a_onthot)
-        o = sp.process(RL.sess, o)
+        #o = sp.process(RL.sess, o)
+        o = preporsess(o)
         observation = np.stack([o]*input_shape[-1],axis=2)
-
+        ep_r = 0
         while True:
-
+           
             action = RL.choose_action(observation)
             #print ('action,',action)
             a_onthot = np.zeros(n_actions)
             a_onthot[action] = 1
             o_, reward, done=game_state.frame_step(a_onthot) # take a random action
-            o_ = sp.process(RL.sess, o_)
+            #o_ = sp.process(RL.sess, o_)
+            o_ = preporsess(o_)
             o_ = o_[:,:,np.newaxis]
             observation_ = np.append(observation[:,:,1:],o_,axis=2)
-                   
+            #observation_ = np.append(o_, observation[:, :, :3], axis=2)
             memory.store_transition(observation, action, reward, observation_)
             
-            
-            if (step > OBSERVE) :#and (step % 1 == 0):
-               
+            if (step > OBSERVE) :
                 data = memory.sample(batch_size)
                 RL.learn(data)
-                #print('step:%d----reward:%f---action:%d'%(step,reward,action))
+            
             # swap observation
             observation = observation_
             ep_r += reward
@@ -218,12 +222,11 @@ if __name__ == '__main__':
                 print('step',step,
                     'episode: ', episode,
                       'ep_r: ', round(ep_r, 2),
-                      ' epsilon: ', round(RL.epsilon_max, 2),
-                      'loss',RL.cost_his[-1]
+                      ' epsilon: ', RL.epsilon,
+                      'loss',RL.cost
                       )
-                ep_r = 0
-
                 break
+
             step += 1
    
   

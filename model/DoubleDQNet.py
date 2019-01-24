@@ -24,7 +24,6 @@ class DoubleDQNet(object):
             learning_rate,
             reward_decay,
             replace_target_iter,
-            memory_size,
             e_greedy,
             e_greedy_increment,
             e_greedy_max,
@@ -40,7 +39,6 @@ class DoubleDQNet(object):
         self.learning_rate=learning_rate
         self.gamma=reward_decay
         self.replace_target_iter=replace_target_iter
-        self.memory_size=memory_size
         self.epsilon=e_greedy
         self.epsilon_max=e_greedy_max
         self.epsilon_increment=e_greedy_increment
@@ -67,22 +65,24 @@ class DoubleDQNet(object):
 
         self.q_eval = self._build_q_net(self.s, scope='eval_net', trainable=True)
         self.q_next = self._build_q_net(self.s_next, scope='target_net', trainable=False)
-        self.q_eval4next  = self._build_q_net(self.s_next, scope='eval_net4next', trainable=True)
+        #self.q_eval4next  = tf.stop_gradient(self._build_q_net(self.s_next, scope='eval_net4next', trainable=True))
+        self.q_eval4next  = self._build_q_net(self.s_next, scope='eval_net4next', trainable=False)
+        
 
-       
 
 
-
-        #use_doubleQ  切片用！！！！
-        self.range_index = tf.placeholder(tf.int32,[None,],name='range_index')
+        
+   
 
         if self.use_doubleQ:
 
-            f = tf.map_fn(lambda x: x, self.range_index) # or perhaps something more useful than identity
-            ix = tf.to_int32(tf.expand_dims(tf.argmax(self.q_eval4next,axis=1),-1))
-            tmp=tf.to_int32(tf.expand_dims(f,-1))
-            index_a = tf.concat([tmp,ix,],axis=1)
-            maxq =  tf.gather_nd(self.q_next,index_a)
+           
+            value_i = tf.to_int32(tf.argmax(self.q_eval4next,axis=1))
+            range_i = tf.range(tf.shape(self.a)[0], dtype=tf.int32)
+            index_a = tf.stack([range_i, value_i], axis=1)
+
+
+            maxq =  tf.gather_nd(params=self.q_next,indices=index_a)
        
         else:
             maxq =  tf.reduce_max(self.q_next, axis=1, name='Qmax_s_')    # shape=(None, )
@@ -97,17 +97,19 @@ class DoubleDQNet(object):
         with tf.variable_scope('loss'):
             self.loss = tf.reduce_mean(tf.squared_difference(self.q_target, self.q_eval_wrt_a, name='TD_error'))
         with tf.variable_scope('train'):
-            self._train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
+            self._train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
 
 
 
         t_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_net')
         e_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='eval_net')
+        en_params = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='eval_net4next')
 
         with tf.variable_scope("hard_replacement"):
             self.target_replace_op=[tf.assign(t,e) for t,e in zip(t_params,e_params)]
 
-
+        with tf.variable_scope("hard_replacement2"):
+            self.target_replace_op2=[tf.assign(t,e) for t,e in zip(en_params,e_params)]
        
         self.sess = tf.Session()
         if self.output_graph:
@@ -116,7 +118,7 @@ class DoubleDQNet(object):
         self.sess.run(tf.global_variables_initializer())
         
         self.cost_his =[0]
-
+        self.cost = 0
 
         self.saver = tf.train.Saver()
 
@@ -134,7 +136,7 @@ class DoubleDQNet(object):
 
     def learn(self,data):
 
-
+        self.sess.run(self.target_replace_op2)
          # check to replace target parameters
         if self.learn_step_counter % self.replace_target_iter == 0:
             self.sess.run(self.target_replace_op)
@@ -145,7 +147,8 @@ class DoubleDQNet(object):
         batch_memory_r = data['r']
         batch_memory_s_ = data['s_']
       
-        batch_memory_index = np.array(list(range(batch_memory_s_.shape[0])))
+    
+        
         _, cost = self.sess.run(
             [self._train_op, self.loss],
             feed_dict={
@@ -153,12 +156,15 @@ class DoubleDQNet(object):
                 self.a: batch_memory_a,
                 self.r: batch_memory_r,
                 self.s_next: batch_memory_s_,
-                self.range_index :batch_memory_index,
+            
             })
-        self.cost_his.append(cost)
-
+        #self.cost_his.append(cost)
+        self.cost = cost
         # increasing epsilon
-        self.epsilon = self.epsilon + self.epsilon_increment if self.epsilon < self.epsilon_max else self.epsilon_max
+        if self.epsilon < self.epsilon_max:
+            self.epsilon += self.epsilon_increment 
+        else:
+            self.epsilon = self.epsilon_max
 
 
 

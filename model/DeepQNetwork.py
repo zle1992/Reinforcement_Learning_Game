@@ -1,3 +1,4 @@
+import os
 import numpy as np 
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
@@ -22,12 +23,13 @@ class DeepQNetwork(object):
             n_features,
             learning_rate,
             reward_decay,
-            e_greedy,
             replace_target_iter,
-            memory_size,
+            e_greedy,
             e_greedy_increment,
+            e_greedy_max,
             output_graph,
             log_dir,
+            model_dir,
             ):
         super(DeepQNetwork, self).__init__()
         
@@ -35,20 +37,24 @@ class DeepQNetwork(object):
         self.n_features = n_features
         self.learning_rate=learning_rate
         self.gamma=reward_decay
-        self.epsilon_max=e_greedy
         self.replace_target_iter=replace_target_iter
-        self.memory_size=memory_size
+        self.epsilon=e_greedy
+        self.epsilon_max=e_greedy_max
         self.epsilon_increment=e_greedy_increment
         self.output_graph=output_graph
         self.lr =learning_rate
+        self.log_dir = log_dir
+        self.model_dir = model_dir 
         # total learning step
         self.learn_step_counter = 0
-        self.log_dir = log_dir
-       
- 
+
 
         self.s = tf.placeholder(tf.float32,[None]+self.n_features,name='s')
         self.s_next = tf.placeholder(tf.float32,[None]+self.n_features,name='s_next')
+
+
+
+
 
         self.r = tf.placeholder(tf.float32,[None,],name='r')
         self.a = tf.placeholder(tf.int32,[None,],name='a')
@@ -56,18 +62,25 @@ class DeepQNetwork(object):
 
         self.q_eval = self._build_q_net(self.s, scope='eval_net', trainable=True)
         self.q_next = self._build_q_net(self.s_next, scope='target_net', trainable=False)
+        self.q_eval4next  = self._build_q_net(self.s_next, scope='eval_net4next', trainable=True)
 
+       
+
+
+
+        maxq =  tf.reduce_max(self.q_next, axis=1, name='Qmax_s_')    # shape=(None, )
 
 
         with tf.variable_scope('q_target'):
-            self.q_target = self.r + self.gamma * tf.reduce_max(self.q_next, axis=1, name='Qmax_s_')    # shape=(None, )
+            #只更新最大的那一列
+            self.q_target = self.r + self.gamma * maxq
         with tf.variable_scope('q_eval'):
             a_indices = tf.stack([tf.range(tf.shape(self.a)[0], dtype=tf.int32), self.a], axis=1)
             self.q_eval_wrt_a = tf.gather_nd(params=self.q_eval, indices=a_indices)    # shape=(None, )
         with tf.variable_scope('loss'):
-            self.loss = tf.reduce_mean(tf.squared_difference(self.q_target, self.q_eval_wrt_a, name='TD_error'))
+            self.loss =tf.losses.mean_squared_error(labels=self.q_target, predictions=self.q_eval_wrt_a)
         with tf.variable_scope('train'):
-            self._train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
+            self._train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
 
 
 
@@ -85,8 +98,19 @@ class DeepQNetwork(object):
 
         self.sess.run(tf.global_variables_initializer())
         
-        self.cost_his =[]
+        self.cost_his =[0]
+        self.cost = 0
 
+        self.saver = tf.train.Saver()
+
+        if not os.path.exists(self.model_dir):
+            os.mkdir(self.model_dir)
+
+        # checkpoint = tf.train.get_checkpoint_state(self.model_dir)
+        # if checkpoint and checkpoint.model_checkpoint_path:
+        #     self.saver.restore(self.sess, checkpoint.model_checkpoint_path)
+        #     print ("Loading Successfully")
+        #     self.learn_step_counter = int(checkpoint.model_checkpoint_path.split('-')[-1]) + 1
     @abstractmethod
     def _build_q_net(self,x,scope,trainable):
         raise NotImplementedError
@@ -99,10 +123,12 @@ class DeepQNetwork(object):
             self.sess.run(self.target_replace_op)
             print('\ntarget_params_replaced\n')
 
-        batch_memory_s = data['s'], 
-        batch_memory_a =  data['a'], 
-        batch_memory_r = data['r'], 
-        batch_memory_s_ = data['s_'], 
+        batch_memory_s = data['s']
+        batch_memory_a =  data['a']
+        batch_memory_r = data['r']
+        batch_memory_s_ = data['s_']
+      
+       
         _, cost = self.sess.run(
             [self._train_op, self.loss],
             feed_dict={
@@ -110,13 +136,22 @@ class DeepQNetwork(object):
                 self.a: batch_memory_a,
                 self.r: batch_memory_r,
                 self.s_next: batch_memory_s_,
+            
             })
-        self.cost_his.append(cost)
-
+        #self.cost_his.append(cost)
+        self.cost = cost
         # increasing epsilon
-        self.epsilon_max = self.epsilon_max + self.epsilon_increment if self.epsilon_max < self.epsilon_max else self.epsilon_max
-        self.learn_step_counter += 1
+        if self.epsilon < self.epsilon_max:
+            self.epsilon += self.epsilon_increment 
+        else:
+            self.epsilon = self.epsilon_max
 
+
+
+        self.learn_step_counter += 1
+            # save network every 100000 iteration
+        if self.learn_step_counter % 10000 == 0:
+            self.saver.save(self.sess,self.model_dir,global_step=self.learn_step_counter)
 
 
 
@@ -124,7 +159,7 @@ class DeepQNetwork(object):
         s = s[np.newaxis,:]
         aa = np.random.uniform()
         #print("epsilon_max",self.epsilon_max)
-        if aa < self.epsilon_max:
+        if aa < self.epsilon:
             action_value = self.sess.run(self.q_eval,feed_dict={self.s:s})
             action = np.argmax(action_value)
         else:

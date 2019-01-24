@@ -70,25 +70,25 @@ def run():
         learning_rate=0.01,
         reward_decay=0.9,
         replace_target_iter=200,
-        memory_size=memory_size,
         e_greedy=0.85,
         e_greedy_increment=0.0001,
         e_greedy_max=0.95,
         output_graph=False,
         log_dir = 'CartPole/log/DeepQNetwork4CartPole/',
-        use_doubleQ = True,
-        model_dir = 'CartPole/model_dir/DeepQNetwork4CartPole/'
+        model_dir = 'CartPole/model_dir/DeepQNetwork4CartPole/',
+        use_doubleQ=True,
         )
 
-    memory = Memory(n_actions,n_features,memory_size=memory_size)
+    memory = Memory(memory_size=memory_size)
   
 
     step = 0
     ep_r = 0
+    max_ep_r = 0
     for episode in range(2000):
         # initial observation
         observation = env.reset()
-
+        ep_r = 0
         while True:
             
 
@@ -120,23 +120,24 @@ def run():
             observation = observation_
             ep_r += reward
             # break while loop when end of this episode
-            if(episode>700): 
-                env.render()  # render on the screen
+            # if(episode>700): 
+            #     env.render()  # render on the screen
             if done:
                 print('step',step,
                     'episode: ', episode,
                       'ep_r: ', round(ep_r, 2),
                       ' epsilon: ', round(RL.epsilon_max, 2),
-                      'loss',RL.cost_his[-1]
+                      'loss',RL.cost,
                       )
-                ep_r = 0
+                max_ep_r = max(max_ep_r,ep_r)
+                
 
                 break
             step += 1
 
     # end of game
-    print('game over')
-    env.destroy()
+    print('game over and max_ep_r:',max_ep_r)
+    
 
 def main():
  

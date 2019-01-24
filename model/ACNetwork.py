@@ -61,7 +61,7 @@ class ACNetwork(object):
             self.v_  = self._build_c_net(self.s_next, scope='v_next', trainable=False)
 
             self.td_error =self.r + self.gamma * self.v_ - self.v
-            self.loss_critic = tf.square(self.td_error)
+            self.loss_critic = tf.reduce_mean(tf.square(self.td_error))
             with tf.variable_scope('train'):
                 self.train_op_critic = tf.train.AdamOptimizer(self.lr).minimize(self.loss_critic)
 

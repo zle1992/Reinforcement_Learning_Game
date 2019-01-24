@@ -3,6 +3,10 @@ import tensorflow as tf
 from collections import deque
 import random
 np.random.seed(1)
+import logging  # 引入logging模块
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s: %(message)s')  # logging.basicConfig函数对日志的输出格式及方式做相关配置
+# 由于日志基本配置中级别设置为DEBUG，所以一下打印信息将会全部显示在控制台上
 class Memory(object):
     """docstring for Memory"""
     def __init__(self, memory_size):
@@ -37,7 +41,44 @@ class Memory(object):
         # print('data_s_',data['s_'].shape)
 
         return data
+class A3CMemory(object):
+    """docstring for ClassName"""
+    def __init__(self,):
+        super(A3CMemory, self).__init__()
+        self.buffer_s = []
+        self.buffer_a = []
+        self.buffer_r = []
+        self.buffer_v_target = []
+    def store_transition(self,s, a, r):
+        self.buffer_s.append(s)
+        self.buffer_a.append(a)
+        self.buffer_r.append(r)
 
+    def clean(self):
+         self.buffer_s = []
+         self.buffer_a = []
+         self.buffer_r = []
+         self.buffer_v_target = []
+    def get_data(self,fly_data = False):
+
+        if fly_data:
+            tmp= [s[np.newaxis,:,:,:] for s in self.buffer_s] 
+            buffer_s =np.concatenate(tmp)
+        else:
+            buffer_s = np.vstack(self.buffer_s)
+
+        buffer_a = np.array(self.buffer_a)
+        buffer_v_target = np.vstack(self.buffer_v_target)
+        
+        #logging.error(buffer_a.shape)
+        #logging.error(buffer_s.shape)
+        return buffer_s, buffer_a, buffer_v_target 
+
+
+
+
+
+    
 
 class StateProcessor(object):
     """

@@ -69,7 +69,7 @@ class ACNetwork4CartPole(ACNetwork):
 
 batch_size = 32
 
-memory_size  =1
+memory_size  =100
 #env = gym.make('Breakout-v0') #离散
 env = gym.make('CartPole-v0') #离散
 
@@ -94,7 +94,7 @@ def run():
         model_dir = 'model_dir/ACNetwork4CartPole/'
         )
 
-    memory = Memory(n_actions,n_features,memory_size=memory_size)
+    memory = Memory(memory_size=memory_size)
   
 
     step = 0
